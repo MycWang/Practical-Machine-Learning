@@ -1,0 +1,134 @@
+---
+title: "Exercise Predict"
+author: "Myc Wang"
+date: "2018/10/30"
+output: 
+  html_document:
+    keep_md: true
+---
+#Introduction
+This report study how well people do exercise using [Weight Lifting Exercise Dataset](http://groupware.les.inf.puc-rio.br/har). The data are from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.  
+
+#Method
+**1. Clean data through removing na values.**  
+**2. First split the training data into training and validation data.**  
+**3. With cross validation, Fit 3 models using classification trees, random forest, and boosting with trees.**  
+**4. Calculate accuracy on validation dataset and pick the best model.**  
+
+#Data Cleaning
+###Clean NAs 
+When directly fit the models, I get an error in na.fail. So there's a lots of NAs in the dataset, I need to get rid of the columns with missing values.  
+
+```r
+#Load the data
+Sys.setlocale("LC_ALL","English")
+testing <- read.csv("./pml-testing.csv")
+training <- read.csv("./pml-training.csv")
+
+#First process noticed that there are more columns with NAs in testing set (60) than training set (93), so we pick the testing set non-NAs only.  
+index <- colSums(is.na(testing))
+testing <- testing[,index == 0]
+training <- training[,index == 0]
+```
+
+###Check remaining column names
+Pick performance and class data only.  
+
+```r
+#compare testing and training, found that only different in the last column
+NameCheck <- names(testing) == names(training)
+table(NameCheck)
+names(testing)[!NameCheck]
+names(training)[!NameCheck]
+
+#read data column names, found firt 7 columns are not related with exercise move performance.
+names(testing)
+names(testing)[1:7]
+
+#remove first 7 columns
+testing <- testing[, -(1:7)]
+training <- training[, -(1:7)]
+```
+
+#Data Spliting
+Split the training data into 75% training set and 25% validation set.  
+
+```r
+library(caret)
+inTrain = createDataPartition(training$classe, p = 3/4)[[1]]
+TrainingSet = training[inTrain,]
+ValidationSet = training[-inTrain,]
+```
+
+#Model Building
+###Set Cross-Validation
+Initially used 3 repeats 10 fold cross-validation, took too long to run. I decided to sse 3 fold cross¨Cvalidation, to reduce run times.  
+
+```r
+cvCtrl <- trainControl(method = "cv", number = 3)
+```
+###Fit 3 Models
+
+```r
+#classification trees
+fit1 <- train(classe ~., data = TrainingSet, method = "rpart", trControl = cvCtrl)
+#random forest
+fit2 <- train(classe ~., data = TrainingSet, method = "rf", trControl = cvCtrl)
+#boosting
+fit3 <- train(classe ~., data = TrainingSet, method = "gbm", trControl = cvCtrl, verbose = FALSE)
+```
+###Select Best Model
+Apply models on validation set, calculate the accuracy.  
+
+```r
+Pred1 <- predict(fit1, ValidationSet)
+Pred2 <- predict(fit2, ValidationSet)
+Pred3 <- predict(fit3, ValidationSet)
+
+Conf1 <- confusionMatrix(ValidationSet$classe, Pred1)
+Conf2 <- confusionMatrix(ValidationSet$classe, Pred2)
+Conf3 <- confusionMatrix(ValidationSet$classe, Pred3)
+
+#classification trees
+Conf1$overall[1]
+```
+
+```
+##  Accuracy 
+## 0.4991843
+```
+
+```r
+#random forest
+Conf2$overall[1]
+```
+
+```
+##  Accuracy 
+## 0.9926591
+```
+
+```r
+#boosting with trees
+Conf3$overall[1]
+```
+
+```
+##  Accuracy 
+## 0.9659462
+```
+*Ramdom forest have the highest accuravy, I choose fit2 for prediction.*
+
+#Results
+Apply the XX model to test set.  
+
+```r
+predict(fit2, testing)
+```
+
+```
+##  [1] B A B A A E D B A A B C B A E E A B B B
+## Levels: A B C D E
+```
+
+
